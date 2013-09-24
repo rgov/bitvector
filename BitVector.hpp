@@ -1,7 +1,7 @@
 /**
  * \file
  * \brief Implements the BitVector class, which computes basic arithmetic on
- * arbitrary-length arrays of bits.
+ * fixed-length arrays of bits.
  * 
  * This file makes significant use of preprocessor macros to (hopefully) reduce
  * the complexity of implementing operations on the bitvectors. Be sure to build
@@ -29,14 +29,22 @@
  * THE SOFTWARE.
  */
 
-#include <string.h>
+#include <string>
+#include <cstring>
+#include <cstdint>
 
 
 /**
  * \typedef word_t
- * \brief A numeric data type that can preferably be stored in a single register
+ * \brief A numeric data type that can be stored in a single register
  */
-typedef unsigned long word_t;
+typedef uint64_t word_t;
+
+/**
+ * \typedef halfword_t
+ * \brief A numeric data type that is half the width of a word_t
+ */
+typedef uint32_t halfword_t;
 
 /**
  * \def CEILDIV(a, d)
@@ -65,48 +73,64 @@ typedef unsigned long word_t;
 /**
  * \def BYTES_TO_BITS(n)
  * \brief Converts n bytes to the corresponding number of bits
+ * \param n - number of bytes
+ * \returns number of bits
  */
 #define BYTES_TO_BITS(n) (BITS_PER_BYTE * (n))
 
 /**
  * \def BITS_TO_BYTES(n)
  * \brief Converts n bits to the corresponding number of bytes
+ * \param n - number of bits
+ * \returns number of bytes
  */
 #define BITS_TO_BYTES(n) CEILDIV((n), BITS_PER_BYTE)
 
 /**
  * \def BYTES_TO_WORDS(n)
  * \brief Converts n bytes to the corresponding number of words
+ * \param n - number of bytes
+ * \returns number of words
  */
 #define BYTES_TO_WORDS(n) CEILDIV((n), BYTES_PER_WORD)
 
 /**
  * \def WORDS_TO_BYTES(n)
  * \brief Converts n words to the correponding number of bytes
+ * \param n - number of words
+ * \returns number of bytes
  */
 #define WORDS_TO_BYTES(n) (BYTES_PER_WORD * (n))
 
 /**
  * \def BITS_TO_WORDS(n)
  * \brief Converts n bits to the corresonding number of words
+ * \param n - number of bits
+ * \returns number of bytes
  */
 #define BITS_TO_WORDS(n) BYTES_TO_WORDS(BITS_TO_BYTES(n))
 
 /**
  * \def WORDS_TO_BITS(n)
  * \brief Converts n words to the corresponding number of bits
+ * \param n - number of words
+ * \returns number of bits
  */
 #define WORDS_TO_BITS(n) BYTES_TO_BITS(WORDS_TO_BYTES(n))
 
 /**
  * \def MASK_WITH_LOWER_BITS(n)
  * \brief Creates a bitmask with only the n lowest-order bits set
+ * \param n - number of low-order bits set
+ * \returns bitmask with n low-order bits set
  */
 #define MASK_WITH_LOWER_BITS(n) ((((word_t)1) << (n)) - 1)
 
 /**
- * \def MAKS_WITH_BIT(n)
+ * \def MASK_WITH_BIT(n)
  * \brief Creates a bitmask with only the bit in position n set
+ * \param n - bit index to be set
+ * \returns bitmask with only the bit in position n set
  */
 #define MASK_WITH_BIT(n) (((word_t)1) << (n))
 
@@ -119,11 +143,16 @@ typedef unsigned long word_t;
  *
  * For example, the 1 bit is in the 7th word, in position 3:
  *
+ * <PRE>
  * Word# 0        1        2        3        4        5        6        7 
  *       -----------------------------------------------------------------------
  *       00000000 00000000 00000000 00000000 00000000 00000000 00000000 00010000
  *       -----------------------------------------------------------------------
  *  Bit# 01234567 01234567 01234567 01234567 01234567 01234567 01234567 01234567
+ * </PRE>
+ *
+ * \param n - the bit index
+ * \returns index of the word that contains this bit
  */
 #define WORD_INDEX_FOR_BIT_IN_ARRAY(n) ((n) / BITS_PER_WORD)
 
@@ -132,40 +161,56 @@ typedef unsigned long word_t;
  * \brief Returns the index of the bit within the word that contains the bit
  *
  * See example for WORD_INDEX_FOR_BIT_IN_ARRAY()
+ *
+ * \param n - the bit index relative to the bitvector
+ * \returns bit index relative to the word
  */
 #define BIT_POSITION_FOR_BIT_IN_WORD(n) ((n) % BITS_PER_WORD)
 
 /**
  * \def OFFSET_OF_WORD_IN_HEAP(n)
- * \brief Returns the offset of the word from the start of heap storage, or a
- * negative number if the word is not on the heap.
+ * \brief Computes the offset of a word relative to heap storage
+ * \param n - the word index
+ * \returns the offset of the word from the start of heap storage, or a
+ * negative number if the word is not on the heap
  */
 #define OFFSET_OF_WORD_IN_HEAP(n) (ssize_t)((n) - BITS_TO_WORDS(N))
 
 /**
  * \def WORD_FROM(v, n)
- * \brief Can be used to refer to a word by its index without caring where that
- * word is stored.
+ * \brief Used to refer to a word by its index without caring where that word
+ * is stored
  *
- * \param v - 
+ * \param v - bitvector object containing this word
+ * \param n - the word index
+ * \returns when used as an R-value, the contents of the word at index n
  */
 #define WORD_FROM(v, n) \
-  (*((OFFSET_OF_WORD_IN_HEAP(n) < 0) ? v.words + (n) \
-                                     : v.morewords + OFFSET_OF_WORD_IN_HEAP(n)))
+  (*((OFFSET_OF_WORD_IN_HEAP(n) < 0) \
+    ? (v).words + (n) \
+    : (v).morewords + OFFSET_OF_WORD_IN_HEAP(n)))
 
+/**
+ * \def WORD(n)
+ * \brief Shortcut for WORD_FROM(*this, n)
+ * \see WORD_FROM(n)
+ */
+#define WORD(n) WORD_FROM(*this, (n))
 
 /**
  * \def HEAP_SIZE_IN_WORDS(n)
- * \brief The number of words allocated on the heap for an n-bit vector
+ * \brief Computes the number of words allocated on the heap
  * 
- * This can and will be negative if there is no heap storage. Always check > 0.
+ * \params n - the size of the vector in bits
+ * \returns the size of the heap storage in words
  */
 #define HEAP_SIZE_IN_WORDS(n) (BITS_TO_WORDS(n) - BITS_TO_WORDS(N))
+
 
 /**
  * BitVector
  *
- * \brief An arbitrary-length array of bits that supports efficient arithmetic
+ * \brief A fixed-length array of bits that supports efficient arithmetic
  * operations.
  *
  * The array is created with some number of bits (N) in-place, which allows it
@@ -261,7 +306,7 @@ public:
   */
  BitVector operator++(int)
  {
-   BitVector result<N>(length, false);
+   BitVector<N> result(length, false);
    
    for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
    {
