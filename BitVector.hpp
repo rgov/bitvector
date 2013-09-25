@@ -162,7 +162,7 @@ typedef uint32_t halfword_t;
  *
  * See example for WORD_INDEX_FOR_BIT_IN_ARRAY()
  *
- * \param n - the bit index relative to the bitvector
+ * \param n - the bit index relative to the BitVector
  * \returns bit index relative to the word
  */
 #define BIT_POSITION_FOR_BIT_IN_WORD(n) ((n) % BITS_PER_WORD)
@@ -181,7 +181,7 @@ typedef uint32_t halfword_t;
  * \brief Used to refer to a word by its index without caring where that word
  * is stored
  *
- * \param v - bitvector object containing this word
+ * \param v - BitVector object containing this word
  * \param n - the word index
  * \returns when used as an R-value, the contents of the word at index n
  */
@@ -225,14 +225,62 @@ template<size_t N>
 class BitVector
 {
 public:
+  
+  
   /**
-   * \brief Constructs a BitVector with the capacity for at least n bits
+   * BitRef
+   *
+   * \brief Like std::bitset::reference, allows reading and setting a single
+   * bit within the BitVector.
+   *
+   * \see BitVector::getBit()
+   * \see BitVector::setBit()
+   */
+  class BitRef
+  {
+  public:
+    BitRef &operator=(bool x)
+    {
+      bv.setBit(index, x);
+    }
+    
+    BitRef &operator=(const BitRef &other)
+    {
+      bv.setBit(index, (bool)other);
+    }
+    
+    operator bool() const
+    {
+      return ((const BitVector<N> &)bv).operator[](index);
+    }
+    
+  private:
+    friend class BitVector;
+    
+    BitRef() { }
+    BitRef(BitVector<N> &BV, size_t Index) : bv(BV), index(Index) { }
+    
+    /**
+     * \brief The BitVector this BitRef refers to
+     */
+    BitVector<N> &bv;
+    
+    /**
+     * \brief The position of the referenced bit within the BitVector
+     */
+    size_t index;
+  };
+  
+  
+  /**
+   * \brief Constructs a BitVector with the capacity for n bits
    *
    * If n is greater than N, the remaining required space is allocated on the
    * heap. Choose N wisely to avoid this allocation.
    *
-   * If clear is set, memory allocated on the heap is cleared. Pass false if the
-   * data on the heap is going to be overwritten immediately.
+   * \param n - the length of the BitVector
+   * \param clear - if set, memory allocated on the heap is cleared. Pass false
+   *   if the data on the heap is going to be overwritten immediately.
    */
   BitVector(size_t n, bool clear = true) : length(n), morewords(nullptr)
   {
@@ -268,13 +316,6 @@ public:
     return std::string(s);
   }
   
-  void setBit(size_t index, bool value)
-  {
-    size_t wordidx = WORD_INDEX_FOR_BIT_IN_ARRAY(index);
-    size_t position = BIT_POSITION_FOR_BIT_IN_WORD(index);
-    WORD(wordidx) |= MASK_WITH_BIT(position);
-  }
-  
   bool getBit(size_t index) const
   {
     size_t wordidx = WORD_INDEX_FOR_BIT_IN_ARRAY(index);
@@ -282,9 +323,27 @@ public:
     return (WORD(wordidx) & MASK_WITH_BIT(position)) != 0;
   }
   
+  void setBit(size_t index, bool x)
+  {
+    size_t wordidx = WORD_INDEX_FOR_BIT_IN_ARRAY(index);
+    size_t position = BIT_POSITION_FOR_BIT_IN_WORD(index);
+    if (x)
+      WORD(wordidx) |= MASK_WITH_BIT(position);
+    else
+      WORD(wordidx) &= ~(MASK_WITH_BIT(position));
+  }
+  
+  bool operator[](size_t index) const
+  {
+    return getBit(index);
+  }
+  
+  BitRef operator[](size_t index)
+  {
+    return BitRef(*this, index);
+  }
+  
   /**
-   * \brief Pre-increment operator
-   *
    * If incrementing a lower-order word causes an overflow to 0, then we need
    * to increment the next word as well to carry.
    */
@@ -300,13 +359,11 @@ public:
   }
   
  /**
-  * \brief Post-increment operator
-  *
-  * Use pre-increment when possible, as this requires an allocation.
+  * Use pre-increment when possible, as this requires copying the BitVector.
   */
  BitVector operator++(int)
  {
-   BitVector<N> result(length, false);
+   BitVector<N> result(*this);
    
    for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
    {
@@ -318,10 +375,8 @@ public:
  }
   
   /**
-   * \brief Pre-decrement operator
-   *
-   * If a lower-order word is zero and we decrement causing an overflow, we need
-   * to borrow from the next word.
+   * If a lower-order word is zero and we decrement causing an underflow, we
+   * need to borrow from the next word.
    */
   BitVector& operator--()
   {
@@ -332,34 +387,33 @@ public:
     }
   }
   
-  /**
-   * \brief Constructs a BitVector as a copy of another.
-   */
   BitVector(const BitVector &other) : length(0), morewords(nullptr)
   {
     copyFrom(other);
   }
   
- /**
-  * \brief Assigns a value to a BitVector, overwriting previous contents
-  */
- BitVector &operator=(const BitVector &other)
- {
-   copyFrom(other);
-   return *this;
- }
+  BitVector &operator=(const BitVector &other)
+  {
+    copyFrom(other);
+    return *this;
+  }
   
 protected:
   /**
-   * \brief Resizes to the desired width, but this is not recommended
+   * \brief Resizes the BitVector to the desired width
+   *
+   * This isn't recommended for performance reasons.
    * 
    * This doesn't try to manage heap storage very carefully; you may end up
-   * with some redundant allocation and copying if you resize a bitvector often.
+   * with some redundant allocation and copying if you resize a BitVector often.
    * The class was not designed with this in mind, so it is not recommended.
+   * 
+   * \param width - the new width
+   * \param clear - if set, zero out heap storage
    */
   void resize(size_t width, bool clear = true)
   {
-    // The number of words on the heap needed to represent bitvectors of this
+    // The number of words on the heap needed to represent BitVectors of this
     // size
     size_t heapWordsNeeded = HEAP_SIZE_IN_WORDS(width);
     
@@ -402,6 +456,8 @@ protected:
   /**
    * \brief Copies the width and contents of another BitVector into this one,
    * overwriting previous contents and allocating memory if necessary
+   *
+   * \param other - the BitVector to copy from
    */
   void copyFrom(const BitVector &other)
   {
@@ -424,7 +480,18 @@ protected:
     }
   }
   
+  /**
+   * \brief The length of the BitVector in bits.
+   */
   size_t length;
+  
+  /**
+   * \brief In-object storage of words.
+   */
   word_t words[BITS_TO_WORDS(N)];
+  
+  /**
+   * \brief Additional heap storage if the length exceeds N words.
+   */
   word_t *morewords;
 };
