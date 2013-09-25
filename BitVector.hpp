@@ -364,13 +364,7 @@ public:
  BitVector operator++(int)
  {
    BitVector<N> result(*this);
-   
-   for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
-   {
-     if ((++ WORD(i)) != 0)
-       break;
-   }
-   
+   this->operator++();
    return result;
  }
   
@@ -385,6 +379,16 @@ public:
       if ((WORD(i) --) != 0)
         return;
     }
+  }
+  
+  /**
+   * Use pre-decrement when possible, as this requires copying the BitVector.
+   */
+  BitVector operator--(int)
+  {
+    BitVector<N> result(*this);
+    this->operator--();
+    return result;
   }
   
   BitVector(const BitVector &other) : length(0), morewords(nullptr)
