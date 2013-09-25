@@ -205,6 +205,9 @@ typedef uint32_t halfword_t;
 /**
  * \def HEAP_SIZE_IN_WORDS(n)
  * \brief Computes the number of words allocated on the heap
+ *
+ * Will be a bogus value if there is no heap storage, so check that the pointer
+ * is non-NULL also.
  * 
  * \params n - the size of the vector in bits
  * \returns the size of the heap storage in words
@@ -460,6 +463,50 @@ public:
   {
     BitVector result(*this);
     result.operator^=(rhs);
+    return result;
+  }
+  
+  /**
+   * \brief Logical left shift
+   *
+   * The endianness of storage confuses things a little bit here. Left shift
+   * slides bits towards the more significant end.
+   */
+  BitVector &operator<<=(size_t count)
+  {
+    if (count == 0)
+      return;
+    
+    // Easy case: count is a multiple of 8, so we can just slide bytes around
+    if (count % BITS_PER_BYTE == 0)
+    {
+      word_t slide = count / 8;
+      
+      // Slide bytes on the heap first, filling in on the left from in-object
+      // storage
+      if (morewords)
+      {
+        memmove(morewords + slide, morewords,
+          HEAP_SIZE_IN_WORDS(length) - slide);
+        memcpy(morewords, words + BITS_TO_WORDS(N) - slide, slide);
+      }
+      
+      // Slide bytes in in-object storage, filling in on the left with zeros
+      memmove(words + slide, words, BITS_TO_WORDS(N) - slide);
+      memset(words, 0, slide);
+    }
+    else
+    {
+      assert(false && "Shift amount is not supported yet");
+    }
+    
+    return *this;
+  }
+  
+  BitVector operator<<(size_t count)
+  {
+    BitVector result(*this);
+    result <<= count;
     return result;
   }
   
