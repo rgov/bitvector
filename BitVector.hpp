@@ -316,13 +316,27 @@ public:
     return length;
   }
   
-  std::string toBinaryString() const
+  std::string toString(int radix = 2) const
   {
-    char s[length + 1];
-    for (size_t i = 0; i < length; i ++)
-      s[i] = getBit(i) ? '1' : '0';
-    s[length] = '\0';
-    return std::string(s);
+    // The output is guaranteed to be at most this long
+    char *s = new char[length + 1];
+    
+    if (radix == 2)
+    {
+      // Output bits from most to least significant
+      for (size_t i = length, j = 0; i >= 0; --i, ++j)
+        s[i] = getBit(j) ? '1' : '0';
+      s[length] = '\0';
+    }
+    else
+    {
+      assert(false && "Not a supported radix")
+    }
+    
+    // Return the string as a std::string
+    std::string str(s);
+    delete [] s;
+    return str;
   }
   
   /**
