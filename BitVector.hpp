@@ -297,6 +297,7 @@ public:
     memset(words, 0, sizeof(words));
     
     // Allocate any additional storage needed on the heap
+    // FIXME: Why doesn't this call resize()?
     size_t heapWordsNeeded = HEAP_SIZE_IN_WORDS(length);
     if (heapWordsNeeded > 0)
     {
@@ -311,6 +312,34 @@ public:
     copyFrom(other);
   }
   
+  /**
+   * \brief Constructs a BitVector from a string
+   *
+   * Only base 2 (binary) strings with no prefix are currently supported.
+   *
+   * \param string - a C string containing digits
+   * \param radix - the base of the digits in the string (must be 2)
+   */
+  BitVector(const char *string, int radix) : length(0), morewords(nullptr)
+  {
+    assert(radix == 2 && "Only binary is supported");
+    
+    // One bit per character in the string
+    length = strlen(string);
+    
+    // Allocate any additional storage needed in the heap. No need to clear
+    // memory, it will be overwritten.
+    // FIXME: Why doesn't this call resize()?
+    size_t heapWordsNeeded = HEAP_SIZE_IN_WORDS(length);
+    if (heapWordsNeeded > 0)
+      morewords = new word_t[heapWordsNeeded];
+    
+    // Copy bits from the string
+    const char *c = string + length - 1;
+    for (size_t i = 0; i <= length; ++i, --c)
+      setBit(i, *c == '1');
+  }
+  
   ~BitVector()
   {
     delete [] morewords;
@@ -321,6 +350,14 @@ public:
     return length;
   }
   
+  /**
+   * \brief Generates a string representing the BitVector
+   * 
+   * Only base 2 (binary) strings are currently supported. Prefixes are not
+   * prepended to the output.
+   *
+   * \param radix - the base to output in (must be 2)
+   */
   std::string toString(int radix = 2) const
   {
     // The output is guaranteed to be at most this long
@@ -329,13 +366,13 @@ public:
     if (radix == 2)
     {
       // Output bits from most to least significant
-      for (size_t i = length, j = 0; i >= 0; --i, ++j)
+      for (size_t i = length, j = 0; i >= 2; --i, ++j)
         s[i] = getBit(j) ? '1' : '0';
       s[length] = '\0';
     }
     else
     {
-      assert(false && "Not a supported radix")
+      assert(false && "Not a supported radix");
     }
     
     // Return the string as a std::string
