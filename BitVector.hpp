@@ -306,6 +306,11 @@ public:
     }
   }
   
+  BitVector(const BitVector &other) : length(0), morewords(nullptr)
+  {
+    copyFrom(other);
+  }
+  
   ~BitVector()
   {
     delete [] morewords;
@@ -540,12 +545,6 @@ public:
   BitVector &negate()
   {
     return this->complement().operator++();
-  }
-  
-  
-  BitVector(const BitVector &other) : length(0), morewords(nullptr)
-  {
-    copyFrom(other);
   }
   
   BitVector &operator=(const BitVector &other)
