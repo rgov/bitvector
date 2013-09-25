@@ -291,20 +291,13 @@ public:
    * \param clear - if set, memory allocated on the heap is cleared. Pass false
    *   if the data on the heap is going to be overwritten immediately.
    */
-  BitVector(size_t n, bool clear = true) : length(n), morewords(nullptr)
+  BitVector(size_t n, bool clear = true) : length(0), morewords(nullptr)
   {
     // Unset all bits; the default value of a BitVector is 0
     memset(words, 0, sizeof(words));
     
-    // Allocate any additional storage needed on the heap
-    // FIXME: Why doesn't this call resize()?
-    size_t heapWordsNeeded = HEAP_SIZE_IN_WORDS(length);
-    if (heapWordsNeeded > 0)
-    {
-      morewords = new word_t[heapWordsNeeded];
-      if (clear)
-        memset(morewords, 0, WORDS_TO_BYTES(heapWordsNeeded));
-    }
+    // Resize to the specified size to allocate additional storage on the heap
+    resize(n, clear);
   }
   
   BitVector(const BitVector &other) : length(0), morewords(nullptr)
@@ -324,15 +317,8 @@ public:
   {
     assert(radix == 2 && "Only binary is supported");
     
-    // One bit per character in the string
-    length = strlen(string);
-    
-    // Allocate any additional storage needed in the heap. No need to clear
-    // memory, it will be overwritten.
-    // FIXME: Why doesn't this call resize()?
-    size_t heapWordsNeeded = HEAP_SIZE_IN_WORDS(length);
-    if (heapWordsNeeded > 0)
-      morewords = new word_t[heapWordsNeeded];
+    // Resize to one bit per character
+    resize(strlen(string), false);
     
     // Copy bits from the string
     const char *c = string + length - 1;
