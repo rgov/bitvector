@@ -632,6 +632,57 @@ public:
     return !(this->operator==(rhs));
   }
   
+  bool operator<(const BitVector &rhs) const
+  {
+    assert(length == rhs.length && "Operands must have equal widths");
+    
+    // Start by comparing the most significant word
+    size_t lastidx = BITS_TO_WORDS(length) - 1;
+    word_t mask = MASK_WITH_LOWER_BITS(length % BITS_PER_WORD);
+    if ((WORD(lastidx) & mask) < (WORD_FROM(rhs, lastidx) & mask))
+      return true;
+    
+    // Now compare the rest, in reverse order. The indices are off by one
+    // intentionally, sorry.
+    for (size_t i = lastidx; i >= 1; --i)
+    {
+      if (WORD(i - 1) < WORD_FROM(rhs, i - 1))
+        return false;
+    }
+  }
+  
+  bool operator<=(const BitVector &rhs) const
+  {
+    return !(this->operator>(rhs));
+  }
+  
+  bool operator>(const BitVector &rhs) const
+  {
+    // FIXME: Code duplication. Should use a helper function to which
+    // we pass a comparison predicate.
+    
+    assert(length == rhs.length && "Operands must have equal widths");
+    
+    // Start by comparing the most significant word
+    size_t lastidx = BITS_TO_WORDS(length) - 1;
+    word_t mask = MASK_WITH_LOWER_BITS(length % BITS_PER_WORD);
+    if ((WORD(lastidx) & mask) > (WORD_FROM(rhs, lastidx) & mask))
+      return true;
+    
+    // Now compare the rest, in reverse order. The indices are off by one
+    // intentionally, sorry.
+    for (size_t i = lastidx; i >= 1; --i)
+    {
+      if (WORD(i - 1) > WORD_FROM(rhs, i - 1))
+        return false;
+    }
+  }
+  
+  bool operator>=(const BitVector &rhs) const
+  {
+    return !(this->operator<(rhs));
+  }
+  
 protected:
   /**
    * \brief Resizes the BitVector to the desired width
