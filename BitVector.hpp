@@ -143,7 +143,7 @@ typedef uint32_t halfword_t;
  * \def WORD_INDEX_FOR_BIT_IN_ARRAY(n)
  * \brief Returns the index of the word in the array that contains this bit
  *
- * Note that this index may exceed the in-place storage and may need to be
+ * Note that this index may exceed the in-object storage and may need to be
  * converted to an offset within the additional heap storage.
  *
  * For example, the 1 bit is in the 7th word, in position 3:
@@ -221,7 +221,7 @@ typedef uint32_t halfword_t;
  * \brief A fixed-length array of bits that supports efficient arithmetic
  * operations.
  *
- * The array is created with some number of bits (N) in-place, which allows it
+ * The array is created with some number of bits (N) in-object, which allows it
  * to avoid heap allocation when the actual number of elements is below that
  * threshold. This allows normal "small" cases to be fast without losing
  * generality for large inputs.
@@ -571,7 +571,7 @@ public:
   }
   
   /**
-   * \brief Computes the one's complement in-place
+   * \brief Computes the one's complement in-object
    * \returns a reference to the same BitVector
    */
   BitVector &complement()
@@ -596,7 +596,7 @@ public:
   }
   
   /**
-   * \brief Computes the two's complement in-place
+   * \brief Computes the two's complement in-object
    * \returns a reference to the same BitVector
    */
   BitVector &negate()
@@ -615,7 +615,8 @@ public:
     assert(length == rhs.length && "Operands must have equal widths");
     
     // Compare all but the most significant word, which may be partial
-    for (size_t i = 0; i < BITS_TO_WORDS(length) - 1; ++i)
+    size_t lastidx = BITS_TO_WORDS(length) - 1;
+    for (size_t i = 0; i < lastidx; ++i)
     {
       if (WORD(i) != WORD_FROM(rhs, i))
         return false;
@@ -623,9 +624,7 @@ public:
     
     // We'll mask out the unused portion of the most significant word
     word_t mask = MASK_WITH_LOWER_BITS(length % BITS_PER_WORD);
-    word_t lastx = WORD(BITS_TO_WORDS(length) - 1) & mask;
-    word_t lasty = WORD_FROM(rhs, BITS_TO_WORDS(length) - 1) & mask;
-    return lastx == lasty;
+    return (WORD(lastidx) & mask) == (WORD_FROM(rhs, lastidx) & mask);
   }
   
   bool operator!=(const BitVector &rhs) const
@@ -656,7 +655,7 @@ protected:
     // The number of words that are currently on the heap
     size_t heapWordsCurrent = HEAP_SIZE_IN_WORDS(length);
     
-    // If the new width can fit entirely in-place, we can free the heap storage
+    // If the new width can fit entirely in-object, we can free the heap storage
     if (width <= N)
     {
       delete [] morewords;
@@ -704,7 +703,7 @@ protected:
     // Resize to the new length
     resize(other.length, false);
     
-    // Copy the in-place words
+    // Copy the in-object words
     memcpy(words, other.words, sizeof(words));
     
     // Allocate any additional storage needed on the heap, and copy to it
