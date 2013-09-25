@@ -480,20 +480,7 @@ public:
     // Easy case: count is a multiple of 8, so we can just slide bytes around
     if (count % BITS_PER_BYTE == 0)
     {
-      word_t slide = count / 8;
-      
-      // Slide bytes on the heap first, filling in on the left from in-object
-      // storage
-      if (morewords)
-      {
-        memmove(morewords + slide, morewords,
-          HEAP_SIZE_IN_WORDS(length) - slide);
-        memcpy(morewords, words + BITS_TO_WORDS(N) - slide, slide);
-      }
-      
-      // Slide bytes in in-object storage, filling in on the left with zeros
-      memmove(words + slide, words, BITS_TO_WORDS(N) - slide);
-      memset(words, 0, slide);
+      slideBytesRight(count / 8); // Yes, _right_.
     }
     else
     {
@@ -703,6 +690,53 @@ protected:
     {
       morewords = new word_t[heapWordsNeeded];
       memcpy(morewords, other.morewords, WORDS_TO_BYTES(heapWordsNeeded));
+    }
+  }
+  
+  /**
+   * \brief Slides stored bytes to to the right (toward MSB)
+   *
+   * \param slide - the number of bytes to slide by
+   * \param fill - the byte to fill in with on the left
+   */
+  void slideBytesRight(size_t slide, unsigned char fill = 0)
+  {
+    // Slide bytes on the heap first, filling in on the left from in-object
+    // storage
+    if (morewords)
+    {
+      memmove(morewords + slide, morewords, HEAP_SIZE_IN_WORDS(length) - slide);
+      memcpy(morewords, words + BITS_TO_WORDS(N) - slide, slide);
+    }
+    
+    // Slide bytes in in-object storage, filling in on the left
+    memmove(words + slide, words, BITS_TO_WORDS(N) - slide);
+    memset(words, fill, slide);
+  }
+  
+  /**
+   * \brief Slides stored bytes to to the left (toward LSB)
+   *
+   * \param slide - the number of bytes to slide by
+   * \param fill - the byte to fill in with on the right
+   */
+  void slideBytesLeft(size_t slide, unsigned char fill = 0)
+  {
+    // Slide in-object bytes first
+    memmove(words, words + slide, HEAP_SIZE_IN_WORDS(length) - slide);
+    
+    // Fill on the right or copy bytes from the heap
+    if (!morewords)
+    {
+      memset(words + slide, fill, slide);
+    }
+    else
+    {
+      memcpy(words + slide, morewords, slide);
+      
+      // Now slide words on the heap and fill
+      memmove(morewords, morewords + slide, HEAP_SIZE_IN_WORDS(length) - slide);
+      memset(morewords + slide, fill, slide);
     }
   }
   
