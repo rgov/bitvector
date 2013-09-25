@@ -30,8 +30,9 @@
  */
 
 #include <string>
-#include <cstring>
+#include <cassert>
 #include <cstdint>
+#include <cstring>
 
 
 /**
@@ -43,6 +44,9 @@ typedef uint64_t word_t;
 /**
  * \typedef halfword_t
  * \brief A numeric data type that is half the width of a word_t
+ * 
+ * This is generally used when we want to know the magnitude of overflow, but
+ * requires twice as many steps
  */
 typedef uint32_t halfword_t;
 
@@ -54,25 +58,21 @@ typedef uint32_t halfword_t;
 
 /**
  * \def BITS_PER_BYTE
- * \brief The number of bits per byte
  */
 #define BITS_PER_BYTE 8
 
 /**
  * \def BYTES_PER_WORD
- * \brief The number of bytes per word
  */
 #define BYTES_PER_WORD sizeof(word_t)
 
 /**
  * \def BITS_PER_WORD
- * \brief The number of bits per word
  */
 #define BITS_PER_WORD (BITS_PER_BYTE * BYTES_PER_WORD)
 
 /**
  * \def BYTES_TO_BITS(n)
- * \brief Converts n bytes to the corresponding number of bits
  * \param n - number of bytes
  * \returns number of bits
  */
@@ -88,7 +88,6 @@ typedef uint32_t halfword_t;
 
 /**
  * \def BYTES_TO_WORDS(n)
- * \brief Converts n bytes to the corresponding number of words
  * \param n - number of bytes
  * \returns number of words
  */
@@ -96,7 +95,6 @@ typedef uint32_t halfword_t;
 
 /**
  * \def WORDS_TO_BYTES(n)
- * \brief Converts n words to the correponding number of bytes
  * \param n - number of words
  * \returns number of bytes
  */
@@ -104,7 +102,6 @@ typedef uint32_t halfword_t;
 
 /**
  * \def BITS_TO_WORDS(n)
- * \brief Converts n bits to the corresonding number of words
  * \param n - number of bits
  * \returns number of bytes
  */
@@ -112,7 +109,6 @@ typedef uint32_t halfword_t;
 
 /**
  * \def WORDS_TO_BITS(n)
- * \brief Converts n words to the corresponding number of bits
  * \param n - number of words
  * \returns number of bits
  */
@@ -133,6 +129,15 @@ typedef uint32_t halfword_t;
  * \returns bitmask with only the bit in position n set
  */
 #define MASK_WITH_BIT(n) (((word_t)1) << (n))
+
+/**
+ * \def EXTRACT_BIT(w, n)
+ * \brief Extracts the nth bit of a word
+ * \param v - the word to extract from
+ * \param n - the index of the bit to extract
+ * \returns 1 if the bit is set, 0 otherwise
+ */
+#define EXTRACT_BIT(w, n) ((((word_t)(w)) >> (n)) & 1)
 
 /**
  * \def WORD_INDEX_FOR_BIT_IN_ARRAY(n)
@@ -321,7 +326,6 @@ public:
   }
   
   /**
-   * \brief Returns the value of the bit
    * \param index - the index of the bit
    * \returns true if the bit is 1, false otherwise
    */
@@ -333,7 +337,6 @@ public:
   }
   
   /**
-   * \brief Sets the bit to the specified value
    * \param index - the index of the bit
    * \param x - true if the bit should be set to 1, false otherwise
    */
@@ -348,7 +351,6 @@ public:
   }
   
   /**
-   * \brief Inverts the specified bit
    * \param index - the index of the bit
    */
   void flipBit(size_t index)
@@ -374,12 +376,55 @@ public:
     return BitRef(*this, index);
   }
   
-  /**
-   * If incrementing a lower-order word causes an overflow to 0, then we need
-   * to increment the next word as well to carry.
-   */
+  BitVector &operator|=(const BitVector &rhs)
+  {
+    assert(length == rhs.length && "Operands must have equal widths");
+    
+    for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
+      WORD(i) |= WORD_FROM(rhs, i);
+  }
+  
+  BitVector operator|(const BitVector &rhs) const
+  {
+    BitVector result(*this);
+    result.operator|=(rhs);
+    return result;
+  }
+  
+  BitVector &operator&=(const BitVector &rhs)
+  {
+    assert(length == rhs.length && "Operands must have equal widths");
+    
+    for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
+      WORD(i) &= WORD_FROM(rhs, i);
+  }
+  
+  BitVector operator&(const BitVector &rhs) const
+  {
+    BitVector result(*this);
+    result.operator&=(rhs);
+    return result;
+  }
+  
+  BitVector &operator^=(const BitVector &rhs)
+  {
+    assert(length == rhs.length && "Operands must have equal widths");
+    
+    for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
+      WORD(i) &= WORD_FROM(rhs, i);
+  }
+  
+  BitVector operator^(const BitVector &rhs) const
+  {
+    BitVector result(*this);
+    result.operator^=(rhs);
+    return result;
+  }
+  
   BitVector& operator++()
   {
+    // If incrementing a lower-order word causes an overflow to 0, then we need
+    // to increment the next word as well to carry.
     for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
     {
       if ((++ WORD(i)) != 0)
@@ -389,22 +434,17 @@ public:
     return *this;
   }
   
- /**
-  * Use pre-increment when possible, as this requires copying the BitVector.
-  */
- BitVector operator++(int)
- {
-   BitVector<N> result(*this);
-   this->operator++();
-   return result;
- }
+  BitVector operator++(int)
+  {
+    BitVector<N> result(*this);
+    this->operator++();
+    return result;
+  }
   
-  /**
-   * If a lower-order word is zero and we decrement causing an underflow, we
-   * need to borrow from the next word.
-   */
   BitVector& operator--()
   {
+    // If a lower-order word is zero and we decrement causing an underflow, we
+    // need to borrow from the next word.
     for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
     {
       if ((WORD(i) --) != 0)
@@ -412,13 +452,36 @@ public:
     }
   }
   
-  /**
-   * Use pre-decrement when possible, as this requires copying the BitVector.
-   */
   BitVector operator--(int)
   {
     BitVector<N> result(*this);
     this->operator--();
+    return result;
+  }
+  
+  BitVector &operator+=(const BitVector &rhs)
+  { 
+    assert(length == rhs.length && "Operands must have equal widths");
+    
+    word_t carry = 0;
+    for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
+    {
+      word_t x = WORD(i);
+      word_t y = WORD_FROM(rhs, i);
+      WORD(i) = x + y + carry;
+      
+      word_t highx = EXTRACT_BIT(x, BITS_PER_WORD - 1);
+      word_t highy = EXTRACT_BIT(y, BITS_PER_WORD - 1);
+      carry = (highx * highy) ^ (carry * (highx ^ highy));
+    }
+    
+    return *this;
+  }
+  
+  BitVector operator+(const BitVector &rhs) const
+  {
+    BitVector result(*this);
+    result.operator+=(rhs);
     return result;
   }
   
@@ -444,7 +507,8 @@ protected:
    * The class was not designed with this in mind, so it is not recommended.
    * 
    * \param width - the new width
-   * \param clear - if set, zero out heap storage
+   * \param clear - if set, zero out heap storage. Pass false
+   *   if the data on the heap is going to be overwritten immediately.
    */
   void resize(size_t width, bool clear = true)
   {
