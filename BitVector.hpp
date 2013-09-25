@@ -233,8 +233,7 @@ public:
    * \brief Like std::bitset::reference, allows reading and setting a single
    * bit within the BitVector.
    *
-   * \see BitVector::getBit()
-   * \see BitVector::setBit()
+   * These wrap BitVector::getBit, BitVector::setBit, and BitVector::flipBit.
    */
   class BitRef
   {
@@ -247,6 +246,11 @@ public:
     BitRef &operator=(const BitRef &other)
     {
       bv.setBit(index, (bool)other);
+    }
+    
+    void flip()
+    {
+      bv.flipBit(index);
     }
     
     operator bool() const
@@ -316,6 +320,11 @@ public:
     return std::string(s);
   }
   
+  /**
+   * \brief Returns the value of the bit
+   * \param index - the index of the bit
+   * \returns true if the bit is 1, false otherwise
+   */
   bool getBit(size_t index) const
   {
     size_t wordidx = WORD_INDEX_FOR_BIT_IN_ARRAY(index);
@@ -323,6 +332,11 @@ public:
     return (WORD(wordidx) & MASK_WITH_BIT(position)) != 0;
   }
   
+  /**
+   * \brief Sets the bit to the specified value
+   * \param index - the index of the bit
+   * \param x - true if the bit should be set to 1, false otherwise
+   */
   void setBit(size_t index, bool x)
   {
     size_t wordidx = WORD_INDEX_FOR_BIT_IN_ARRAY(index);
@@ -333,11 +347,28 @@ public:
       WORD(wordidx) &= ~(MASK_WITH_BIT(position));
   }
   
+  /**
+   * \brief Inverts the specified bit
+   * \param index - the index of the bit
+   */
+  void flipBit(size_t index)
+  {
+    size_t wordidx = WORD_INDEX_FOR_BIT_IN_ARRAY(index);
+    size_t position = BIT_POSITION_FOR_BIT_IN_WORD(index);
+    WORD(wordidx) ^= MASK_WITH_BIT(position);
+  }
+  
+  /**
+   * \returns the truth value of the specified bit
+   */
   bool operator[](size_t index) const
   {
     return getBit(index);
   }
   
+  /**
+   * \returns a BitRef for the specified bit, supporting assignment
+   */
   BitRef operator[](size_t index)
   {
     return BitRef(*this, index);
