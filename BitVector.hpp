@@ -610,6 +610,29 @@ public:
     return *this;
   }
   
+  bool operator==(const BitVector &rhs) const
+  {
+    assert(length == rhs.length && "Operands must have equal widths");
+    
+    // Compare all but the most significant word, which may be partial
+    for (size_t i = 0; i < BITS_TO_WORDS(length) - 1; ++i)
+    {
+      if (WORD(i) != WORD_FROM(rhs, i))
+        return false;
+    }
+    
+    // We'll mask out the unused portion of the most significant word
+    word_t mask = MASK_WITH_LOWER_BITS(length % BITS_PER_WORD);
+    word_t lastx = WORD(BITS_TO_WORDS(length) - 1) & mask;
+    word_t lasty = WORD_FROM(rhs, BITS_TO_WORDS(length) - 1) & mask;
+    return lastx == lasty;
+  }
+  
+  bool operator!=(const BitVector &rhs) const
+  {
+    return !(this->operator==(rhs));
+  }
+  
 protected:
   /**
    * \brief Resizes the BitVector to the desired width
