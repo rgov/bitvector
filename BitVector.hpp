@@ -421,7 +421,7 @@ public:
     return result;
   }
   
-  BitVector& operator++()
+  BitVector &operator++()
   {
     // If incrementing a lower-order word causes an overflow to 0, then we need
     // to increment the next word as well to carry.
@@ -441,7 +441,7 @@ public:
     return result;
   }
   
-  BitVector& operator--()
+  BitVector &operator--()
   {
     // If a lower-order word is zero and we decrement causing an underflow, we
     // need to borrow from the next word.
@@ -463,6 +463,8 @@ public:
   { 
     assert(length == rhs.length && "Operands must have equal widths");
     
+    // Implementation of the full adder algorithm from the Wikipedia article
+    // "Adder (electronics)"
     word_t carry = 0;
     for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
     {
@@ -472,7 +474,7 @@ public:
       
       word_t highx = EXTRACT_BIT(x, BITS_PER_WORD - 1);
       word_t highy = EXTRACT_BIT(y, BITS_PER_WORD - 1);
-      carry = (highx * highy) ^ (carry * (highx ^ highy));
+      carry = (highx & highy) ^ (carry & (highx ^ highy));
     }
     
     return *this;
@@ -484,6 +486,48 @@ public:
     result.operator+=(rhs);
     return result;
   }
+  
+  BitVector operator~() const
+  {
+    BitVector result(*this);
+    result.complement();
+    return result;
+  }
+  
+  /**
+   * \brief Computes the one's complement in-place
+   * \returns a reference to the same BitVector
+   */
+  BitVector &complement()
+  {
+    for (size_t i = 0; i < BITS_TO_WORDS(length); i ++)
+      WORD(i) ^= ~(word_t)0;
+    return *this;
+  }
+  
+  BitVector operator-() const
+  {
+    BitVector result(*this);
+    result.negate();
+    return result;
+  }
+  
+  BitVector operator+() const
+  {
+    // Not sure why anyone would use this!
+    BitVector result(*this);
+    return result;
+  }
+  
+  /**
+   * \brief Computes the two's complement in-place
+   * \returns a reference to the same BitVector
+   */
+  BitVector &negate()
+  {
+    return this->complement().operator++();
+  }
+  
   
   BitVector(const BitVector &other) : length(0), morewords(nullptr)
   {
@@ -580,17 +624,17 @@ protected:
   }
   
   /**
-   * \brief The length of the BitVector in bits.
+   * \brief The length of the BitVector in bits
    */
   size_t length;
   
   /**
-   * \brief In-object storage of words.
+   * \brief In-object storage of words
    */
   word_t words[BITS_TO_WORDS(N)];
   
   /**
-   * \brief Additional heap storage if the length exceeds N words.
+   * \brief Additional heap storage if the length exceeds N words
    */
   word_t *morewords;
 };
