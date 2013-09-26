@@ -647,8 +647,10 @@ public:
     for (size_t i = lastidx; i >= 1; --i)
     {
       if (WORD(i - 1) < WORD_FROM(rhs, i - 1))
-        return false;
+        return true;
     }
+    
+    return false;
   }
   
   bool operator<=(const BitVector &rhs) const
@@ -674,8 +676,10 @@ public:
     for (size_t i = lastidx; i >= 1; --i)
     {
       if (WORD(i - 1) > WORD_FROM(rhs, i - 1))
-        return false;
+        return true;
     }
+    
+    return false;
   }
   
   bool operator>=(const BitVector &rhs) const
