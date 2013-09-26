@@ -686,10 +686,11 @@ protected:
   {
     // The number of words on the heap needed to represent BitVectors of this
     // size
-    size_t heapWordsNeeded = HEAP_SIZE_IN_WORDS(width);
+    size_t heapWordsNeeded = (width > N ? HEAP_SIZE_IN_WORDS(width) : 0);
     
     // The number of words that are currently on the heap
-    size_t heapWordsCurrent = HEAP_SIZE_IN_WORDS(length);
+    size_t heapWordsCurrent =
+      (morewords == nullptr ? 0 : HEAP_SIZE_IN_WORDS(length));
     
     // If the new width can fit entirely in-object, we can free the heap storage
     if (width <= N)
