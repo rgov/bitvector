@@ -322,6 +322,8 @@ public:
     
     // Resize to one bit per character
     resize(strlen(string), false);
+    if (length == 0)
+      return;
     
     // Copy bits from the string
     const char *c = string + length - 1;
